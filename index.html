@@ -14,57 +14,165 @@
       display: flex;
       overflow: hidden;
     }
-
-    /* Sidebar */
-    #sidebar {
-      width: 260px;
-      background: rgba(15, 15, 15, 0.95);
-      border-right: 1px solid #222;
-      padding: 20px;
-      display: none;
-      flex-direction: column;
-    }
-    #sidebar h2 { margin: 0 0 12px; font-size: 18px; color: #00c6ff; }
-    .history-item {
-      padding: 10px;
-      margin: 6px 0;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.05);
-      cursor: pointer;
-      transition: background .2s;
-    }
-    .history-item:hover { background: rgba(255,255,255,0.15); }
-
-    /* Main */
     #main { flex: 1; display: flex; flex-direction: column; }
+    #header { display:flex;justify-content:space-between;align-items:center;
+      padding:14px 20px; background:rgba(20,20,20,0.9); border-bottom:1px solid #222;}
+    #header h1{font-size:22px; margin:0; color:#00c6ff;}
+    #chat{flex:1; padding:20px; overflow-y:auto; display:flex; flex-direction:column;}
+    .message{max-width:75%; padding:14px 18px; border-radius:16px; margin:12px 0;}
+    .user{align-self:flex-end;background:rgba(0,180,255,0.2);color:#00e1ff;}
+    .bot{align-self:flex-start;background:#0f0f0f; color:#fff;}
+    .actions{margin-top:6px; display:flex; gap:8px;}
+    .actions button{padding:4px 10px; border:none; border-radius:6px; cursor:pointer;}
+    #input-area{display:flex;gap:10px;padding:14px;background:rgba(20,20,20,0.9);}
+    #input{flex:1;padding:12px;border:none;border-radius:12px;font-size:16px;outline:none;}
+    #send{padding:12px 18px;border:none;border-radius:12px;background:linear-gradient(135deg,#ff0080,#ff8c00);color:white;}
+    #footer{text-align:center;padding:6px;font-size:12px;background:rgba(20,20,20,0.9);}
+    /* Modal */
+    #welcome-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);
+      display:flex;justify-content:center;align-items:center;z-index:999;}
+    #welcome-box{background:#111;padding:30px;border-radius:12px;text-align:center;max-width:300px;}
+    #welcome-box button{margin-top:20px;padding:10px 20px;border:none;border-radius:10px;
+      background:linear-gradient(135deg,#ff0080,#ff8c00);color:white;cursor:pointer;}
+  </style>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="main">
+    <div id="header">
+      <h1>Ai Dayzx</h1>
+      <div id="login-area">
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID"
+             data-context="signin"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin" data-type="standard"></div>
+      </div>
+    </div>
 
-    /* Header */
-    #header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 14px 20px; background: rgba(20,20,20,0.9);
-      border-bottom: 1px solid #222; backdrop-filter: blur(10px);
-    }
-    #header h1 { font-size: 22px; margin: 0; color: #00c6ff; font-weight: 600; }
-    #header button {
-      border: none; background: none; color: #fff;
-      cursor: pointer; font-size: 20px;
-    }
-    #header .right button {
-      padding: 8px 14px;
-      background: linear-gradient(135deg,#ff0080,#ff8c00);
-      border-radius: 10px;
-      color: white;
-      font-weight: 500;
-      border: none;
-      cursor: pointer;
-      transition: transform .2s, box-shadow .2s;
-    }
-    #header .right button:hover { transform: scale(1.05); box-shadow: 0 0 12px rgba(255,0,128,0.6); }
+    <div id="chat"></div>
 
-    /* Chat */
-    #chat {
-      flex: 1; padding: 20px; overflow-y: auto;
-      display: flex; flex-direction: column;
+    <div id="input-area">
+      <input id="input" type="text" placeholder="Ketik pesan..." onkeydown="if(event.key==='Enter') sendMessage()" />
+      <button id="send" onclick="sendMessage()">🚀</button>
+    </div>
+
+    <div id="footer">Developed by Dayzx Tech</div>
+  </div>
+
+  <!-- Modal Sambutan -->
+  <div id="welcome-modal">
+    <div id="welcome-box">
+      <h2>Ada yang bisa Asistand Dayzx bantu?</h2>
+      <button onclick="closeWelcome()">Mulai Chat</button>
+    </div>
+  </div>
+
+  <script>
+    const API_KEY = "YOUR_GEMINI_API_KEY";
+    const chatBox = document.getElementById("chat");
+    let stopTyping = false;
+    let loggedIn = false;
+    let quota = 10;
+
+    function closeWelcome(){
+      document.getElementById("welcome-modal").style.display="none";
+    }
+
+    async function sendMessage(){
+      const input=document.getElementById("input");
+      const text=input.value.trim();
+      if(!text) return;
+      if(!loggedIn && quota<=0){
+        appendMessage("⚠️ Batas 10 jawaban tercapai. Silakan login Google untuk lanjut tanpa batas.","bot");
+        return;
+      }
+      appendMessage(text,"user");
+      input.value="";
+      showTyping();
+
+      try{
+        const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+API_KEY,{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({contents:[{parts:[{text}]}]})
+        });
+        const data=await res.json();
+        const reply=data?.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ Error API";
+        removeTyping();
+        typeWriter(reply,"bot");
+        if(!loggedIn){ quota--; }
+      }catch(e){
+        removeTyping();
+        appendMessage("⚠️ Gagal koneksi","bot");
+      }
+    }
+
+    function appendMessage(text,sender){
+      const msg=document.createElement("div");
+      msg.classList.add("message",sender);
+      msg.textContent=text;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop=chatBox.scrollHeight;
+    }
+
+    function typeWriter(text,sender){
+      const msg=document.createElement("div");
+      msg.classList.add("message",sender);
+      chatBox.appendChild(msg);
+      let i=0;
+      stopTyping=false;
+
+      function typing(){
+        if(stopTyping){ 
+          msg.textContent=text;
+          if(sender==="bot") addActions(msg,text);
+          return;
+        }
+        if(i<text.length){
+          msg.textContent+=text.charAt(i);
+          i++;
+          chatBox.scrollTop=chatBox.scrollHeight;
+          setTimeout(typing,10);
+        }else if(sender==="bot"){
+          addActions(msg,text);
+        }
+      }
+      typing();
+    }
+
+    function addActions(msg,text){
+      const actions=document.createElement("div");
+      actions.className="actions";
+      // Stop button
+      const stopBtn=document.createElement("button");
+      stopBtn.textContent="⏹ Stop";
+      stopBtn.onclick=()=>{ stopTyping=true; };
+      actions.appendChild(stopBtn);
+      msg.appendChild(actions);
+    }
+
+    function showTyping(){
+      const div=document.createElement("div");
+      div.classList.add("message","bot","typing");
+      div.innerHTML='...sedang mengetik';
+      chatBox.appendChild(div);
+      chatBox.scrollTop=chatBox.scrollHeight;
+    }
+    function removeTyping(){ document.querySelector(".typing")?.remove(); }
+
+    // Google login
+    function handleCredentialResponse(response){
+      if(response.credential){
+        loggedIn=true;
+        quota=Infinity;
+        appendMessage("✅ Login Google berhasil. Anda bisa chat tanpa batas.","bot");
+      }
+    }
+  </script>
+</body>
+</html>
       scroll-behavior: smooth;
     }
     .message {
